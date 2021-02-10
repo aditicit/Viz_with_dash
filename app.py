@@ -1,97 +1,171 @@
 import pandas as pd
-import plotly.express as px  
+import plotly.express as px  # (version 4.7.0)
+import plotly.graph_objects as go
+import numpy as np
 
-import dash 
+import dash  # (version 1.12.0) pip install dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 
 app = dash.Dash(__name__)
 
-# ------------------------------------------------------------------------------
-# Import and clean data (importing csv into pandas)
-df = pd.read_csv("E:\Data Science\Bank_Dataset\Train.csv")
+df = pd.read_csv("C:\\Users\\LENOVO\\WebScrapping\\covidreport.csv")
+df=df.dropna()
+df_continent=df['Continents'].value_counts().keys()
+df_continent
+#df1 = df.groupby(['Continents']).count()[['Deaths','Confirmed']]
+#df1.reset_index(inplace=True)
+#print(df1[:5])
+df1= pd.read_csv("https://s3.amazonaws.com/rawstore.datahub.io/f6f2ac7be65b7d271b8a3b74df3ad724.csv")
+df_Ind = df1[df1['Country']=='India']
+print(df_Ind[:5])
+df2_rest = pd.read_csv("https://s3.amazonaws.com/rawstore.datahub.io/9dc095afacc22888e66192aa23e71314.csv")
 
-df['Item_Weight']=df['Item_Weight'].fillna(df['Item_Weight'].mean())
-df['Outlet_Size']=df['Outlet_Size'].fillna(df['Outlet_Size'].mode()[0])
-df['Item_Fat_Content']=df['Item_Fat_Content'].replace({'low fat':'Low Fat','LF':'Low Fat','reg':'Regular'})
-fig1 = px.bar(data_frame=df, x="Item_Type",color="Outlet_Type",barmode="stack")
-fig2 = px.bar(data_frame=df, x="Item_Type",color="Item_Fat_Content",barmode="stack")
+fig2 = px.sunburst(df, path=['Continents', 'Country'], values='Confirmed',
+                  color='Deaths', hover_data=['Country'],
+                  color_continuous_scale='RdBu',
+                  color_continuous_midpoint=np.average(df['Deaths'], weights=df['Confirmed']))
 
+fig3 = px.scatter_geo(df, locationmode='country names', locations='Country', color='Continents',
+                     hover_name='Country', size='Confirmed',
+                     projection='natural earth')
+
+fig4 = px.area(df1, x="Date", y="Recovered", color="Country",line_group="Country")
+fig4.update_xaxes(rangeslider_visible=True)
+#fig4 = px.area(df1, facet_col=['Confirmed','Recovered','Deaths'], facet_col_wrap=3)
 # ------------------------------------------------------------------------------
 # App layout
-app.layout = html.Div(children=[
-
+app.layout = html.Div([
+    
     html.Div([
 
-    html.H1("Dashboard of Big Mart Dataset with Dash", style={'text-align': 'center'}),
-        
-    ## create a dash core component-drop down with different outlet options
-    dcc.Dropdown(id="outlet_type",
-                 options=[
-                     {"label": "Supermarket Type1", "value": 'Supermarket Type1'},
-                     {"label": "Supermarket Type2", "value": 'Supermarket Type2'},
-                     {"label": "Grocery Store", "value": 'Grocery Store'},
-                     {"label": "Supermarket Type3", "value": 'Supermarket Type3'}],
-                 multi=False,
-                 value='Grocery Store',
-                 style={'width': "40%"}
-                 ),
+    html.H1("Web Application Dashboards with Dash", style={'text-align': 'center'}),
+
+    #dcc.Dropdown(id="slct_continent",
+     #            options=[
+     #                {'label': 'Asia', 'value': 'Asia'},
+     #                {'label': 'Africa', 'value': 'Africa'},
+     #                {'label': 'Europe', 'value': 'Europe'},
+     #                {'label': 'South America', 'value': 'South America'},
+     #                {'label': 'North America', 'value': 'North America'},
+     #                {'label': 'Australia/Oceania', 'value': 'Australia/Oceania'},
+     #               ],
+     #            multi=False,
+     #            value='Asia',
+     #            style={'width': "40%"}
+     #            ),
+        dcc.Dropdown(
+        id="option_slctd",
+        options=[{"label": x1, "value": x1} 
+                 for x1 in df_continent],
+        value=df_continent[1],
+        clearable=False,
+        style={'width': "40%"}
+    ),
 
     html.Div(id='output_container', children=[]),
     html.Br(),
 
-    dcc.Graph(id='big_mart_map', figure={})
+    dcc.Graph(id='covid_map', figure={})
 
 ]),
-    ## Bar chart representation of Item Vs Outlet
-    html.Div([
-            html.H1(children='Item Vs Outlet'),
 
-            html.Div(children='''
-                Count of Item present in different Outlet
-            '''),
+    html.Div([
+            html.H1(children='Confirmed-Death cases'),
 
             dcc.Graph(
                 id='graph2',
-                figure=fig1
+                figure=fig2
             ),  
-        ], className='six columns'),
+        ]),
     
-    ## Stacked bar chart showing Fat present in each item
     html.Div([
-            html.H1(children='Fat content in each item'),
+            html.H1(children='Covid19 spread on Earth'),
 
             dcc.Graph(
                 id='graph3',
-                figure=fig2
+                figure=fig3
             ),  
-        ], className='row')
-])
+        ]),
     
+    html.Div([
+        
+        html.H1("Daily update of Covid in India", style={'text-align': 'center'}),
+        dcc.Dropdown(
+        id="ticker",
+        options=[{"label": x, "value": x} 
+                 for x in df_Ind.columns[2:]],
+        value=df_Ind.columns[3],
+        clearable=False,
+        style={'width': "40%"}    
+    ),
+    dcc.Graph(id="time-series-chart"),
+        ]),
+    
+     html.Div([
+            html.H1(children='Covid recovery on Earth'),
+
+            dcc.Graph(
+                id='graph4',
+                figure=fig4
+            ),  
+        ])
+])
 # ------------------------------------------------------------------------------
 # Connect the Plotly graphs with Dash Components
 @app.callback(
     [Output(component_id='output_container', component_property='children'),
-     Output(component_id='big_mart_map', component_property='figure')],
-    [Input(component_id='outlet_type', component_property='value')]
+     Output(component_id='covid_map', component_property='figure'),
+     Output("time-series-chart", "figure")],
+    [Input(component_id='option_slctd', component_property='value'),
+     Input("ticker", "value")]
 )
-## this function will return a countplot of the selected outlet option
-def update_graph(option_slctd):
-    print(option_slctd)
-    print(type(option_slctd))
-
-    container = "The outlet selected by user was: {}".format(option_slctd)
+def update_graph(option_slctd,ticker):
+    
+    container = "The Continent chosen by user was: {}".format(option_slctd)
 
     dff = df.copy()
-    dff = dff[dff["Outlet_Type"] == option_slctd]
-    print(dff)
-    df_group = dff.groupby(by=["Outlet_Type","Outlet_Location_Type"]).size().reset_index(name="counts")
-    print(df_group)
-    fig = px.bar(data_frame=df_group, x="Outlet_Type", y="counts", color="Outlet_Location_Type", barmode="group")
-    return container, fig
+    dff = dff[dff["Continents"] == option_slctd]
+   
+    # Plotly Express
+    fig = px.choropleth(
+        data_frame=dff,
+        locationmode='country names',
+        locations='Country',
+        scope="world",
+        color='Deaths',
+        hover_data=['Country', 'Deaths','Confirmed'],
+        color_continuous_scale=px.colors.sequential.YlOrRd,
+        labels={'Deaths': 'No. of Deaths'},
+        template='plotly_dark'
+    )
+    
+    fig5 = px.line(df_Ind, x='Date', y=ticker, title='Date tracking with Rangeslider')
+    fig5.update_xaxes(rangeslider_visible=True)
+    # Plotly Graph Objects (GO)
+    # fig = go.Figure(
+    #     data=[go.Choropleth(
+    #         locationmode='USA-states',
+    #         locations=dff['state_code'],
+    #         z=dff["Pct of Colonies Impacted"].astype(float),
+    #         colorscale='Reds',
+    #     )]
+    # )
+    #
+    # fig.update_layout(
+    #     title_text="Bees Affected by Mites in the USA",
+    #     title_xanchor="center",
+    #     title_font=dict(size=24),
+    #     title_x=0.5,
+    #     geo=dict(scope='usa'),
+    # )
+
+    return container, fig, fig5
 
 
+    
+    
 
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
